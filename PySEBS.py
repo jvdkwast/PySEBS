@@ -1,100 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: latin-1 -*-
-import Tkinter, tkFileDialog, tkSimpleDialog
-from Tkinter import *
-from PCRaster import *
-from time import *
-import string
+from pcraster import *
 
 
-# Splash screen
-main = Tk()
-main.title('SEBS v.5.0')
-#main.iconbitmap('f:/d/temp/globe.ico')
-msg = Message(main, text="============================================\nPCRaster SEBS version 5.0 (January 28th 2010).\nCalculates surface energy fluxes\nBased on SEBS (Su, 2002)\n\nProgrammed by J. van der Kwast\nUnit Environmental Modelling\nFlemish Institute for Technological Research (VITO)\nhans.vanderkwast@vito.be\n============================================", width=500)
-msg.pack()
-
-button = Button(main, text="Continue", command=main.destroy)
-button.pack()
-
-mainloop()
-
-# General functions
-class parameterDialog(tkSimpleDialog.Dialog):
-
-    def body(self, master):
-
-        Label(master, text="Transmissivity:").grid(row=0)
-        Label(master, text="Latitude [dd]: ").grid(row=1)
-        Label(master, text="Day of Year:").grid(row=2)
-        Label(master, text="Time of overpass [decimal hours]:").grid(row=3)
-        Label(master, text="PBL height [m]:").grid(row=4)
-        Label(master, text="Measurement height [m]:").grid(row=5)
-        Label(master, text="Wind speed [m/s]:").grid(row=6)
-        Label(master, text="Air temperature [Celcius]:").grid(row=7)
-        Label(master, text="Air pressure [Pa]:").grid(row=8)
-        Label(master, text="Relative humidity [0-1]:").grid(row=9)
-
-        self.e1 = Entry(master)
-        self.e2 = Entry(master)
-        self.e3 = Entry(master)
-        self.e4 = Entry(master)
-        self.e5 = Entry(master)
-        self.e6 = Entry(master)
-        self.e7 = Entry(master)
-        self.e8 = Entry(master)
-        self.e9 = Entry(master)
-        self.e10 = Entry(master)
-
-        self.e1.grid(row=0, column=1)
-        self.e1.insert(0,0.788606)
-	self.e2.grid(row=1, column=1)
-        self.e2.insert(0,33.9932)
-        self.e3.grid(row=2, column=1)
-        self.e3.insert(0,294.0)
-        self.e4.grid(row=3, column=1)
-        self.e4.insert(0,11.217)
-        self.e5.grid(row=4, column=1)
-        self.e5.insert(0,1000.0)
-        self.e6.grid(row=5, column=1)
-        self.e6.insert(0,2.5)
-        self.e7.grid(row=6, column=1)
-        self.e7.insert(0,4.313)
-        self.e8.grid(row=7, column=1)
-        self.e8.insert(0,27.35)
-        self.e9.grid(row=8, column=1)
-        self.e9.insert(0,100000.0)
-        self.e10.grid(row=9, column=1)
-        self.e10.insert(0,0.5055)
-        return self.e1 # initial focus
-
-    def apply(self):
-        first = float(self.e1.get())
-        second = float(self.e2.get())
-        third = float(self.e3.get())
-        fourth = float(self.e4.get())
-        fifth = float(self.e5.get())
-        sixth = float(self.e6.get())
-        seventh = float(self.e7.get())
-        eight = float(self.e8.get())
-        nineth = float(self.e9.get())
-	tenth = float(self.e10.get())
-	
-	self.result = first,second,third,fourth,fifth,sixth,seventh,eight,nineth,tenth 
-
-def guiInputMap(map,default):
-    root = Tkinter.Tk()
-    root.withdraw()
-    question = 'Choose '+ map + ' map'
-    selectInputMap = tkFileDialog.askopenfilename(parent=root,title=question, filetypes=[('PCRaster Files','*.map'),],initialfile=default)
-    return selectInputMap
-
-def guiOutputMap(map,default):
-    root = Tkinter.Tk()
-    root.withdraw()
-    question = 'Save '+ map + ' map'
-    selectOutputMap = tkFileDialog.asksaveasfilename(parent=root,title=question,filetypes=[('PCRaster Files','*.map'),],initialfile=default)
-    return selectOutputMap
 
 def assertWithinRange(map, Lower, Upper):
    """ Checks the range of maps
@@ -295,7 +203,7 @@ def FKB_1(u_zref, zref, h, LAI, Wfol, Ta, pa):
    nu0 = 1.327E-5 * (101325.0 / pa) * (Ta / 273.15 + 1.0) ** 1.81 # kinematic viscosity
    n_h = C_d * LAI / (2.0 * ust2u_h ** 2.0)
    # First term
-   if n_h <> 0.0:
+   if n_h != 0.0:
       F1st = k * C_d / (4.0 * C_t * ust2u_h * (1.0 - exp(pcrumin(n_h)/2.0))) * Wfol ** 2.0
    else:
       F1st = 0.0
@@ -353,7 +261,7 @@ def Rn(Alfa, Rswd, Eair, t_pbl, ems, T):
    t_pbl Input PBL temperature map [K]
    T Surface Kinetic Temperature [K]"""
    
-   print "Calculating Net Radiation map..."
+   print("Calculating Net Radiation map...")
    # constants
    sigma = 5.678E-8   #Stefan Boltzmann's constant (W m-2 K-4)
    
@@ -366,7 +274,7 @@ def G0(Rn, cover):
    Rn Input Surface Net Radiation [W m-2]
    cover Input fractional canopy cover [-]"""
    
-   print "Calculating soil heat flux map..."
+   print("Calculating soil heat flux map...")
    # constants:
    Gamma_c = 0.05   # ratio of G0 to Rn for full vegetation canopy (Monteith, 1973)
    Gamma_s = 0.315  # ratio of G0 to Rn for bare soil (Kustas & Daughtry, 1989)
@@ -380,7 +288,7 @@ def FRUstar(z_pbl,hst):
    z_pbl Input PBL depth [m]
    hst Input height of the ASL [m]"""
    
-   print "Starting iterations to derive stability parameters..." 
+   print("Starting iterations to derive stability parameters..." )
    
    RUstar = ku / zdm
    RH = CH * RUstar / zdh
@@ -413,8 +321,8 @@ def FRUstar(z_pbl,hst):
       RH0A = RHA
       IstepsA = IstepsA + 1
       percentage = (IstepsA/itNr)*100
-      print "Iteration A:", int(percentage), "% completed\r",
-   print
+      print("Iteration A:", int(percentage), "% completed\r",)
+   print()
    
    while RepsB > itThreshold and IstepsB < itNr:
       RLB = CL * RUstarB ** 3.0 / RHB
@@ -431,8 +339,8 @@ def FRUstar(z_pbl,hst):
       RH0B = RHB
       IstepsB =  IstepsB + 1
       percentage = (IstepsB/itNr)*100
-      print "Iteration B:", int(percentage), "% completed\r",
-   print 
+      print("Iteration B:", int(percentage), "% completed\r",)
+   print() 
    RUstar = ifthenelse(z_pbl >= hst, RUstarA, RUstarB)
    RL = ifthenelse(z_pbl >= hst, RLA, RLB)
    dif = ifthenelse(z_pbl >= hst, difa, difb)
@@ -538,37 +446,45 @@ def esat(t):
 # Define inputs
 # maps
 
-DEM = readmap(guiInputMap('DEM','./example/dem90.map'))	# Digital Elevation Model [m]
-nd = readmap(guiInputMap('NDVI','./example/ndvi90.map')) # NDVI map [-]
-T = readmap(guiInputMap('Surface Temperature [K]','./example/tkin90.map')) # Surface temperature [Kelvin]
-albedo = readmap(guiInputMap('Albedo','./example/albedo90.map')) # Albedo map [-]
-ems = readmap(guiInputMap('Emissivity','./example/emissivity90.map')) # emissivity [-]
+DEM = readmap('./example/dem90.map')	# Digital Elevation Model [m]
+nd = readmap('./example/ndvi90.map') # NDVI map [-]
+T = readmap('./example/tkin90.map') # Surface temperature [Kelvin]
+albedo = readmap('./example/albedo90.map') # Albedo map [-]
+ems = readmap('./example/emissivity90.map') # emissivity [-]
 
 # parameters
-root = Tkinter.Tk()
-root.title("Enter SEBS model parameters:")
-d = parameterDialog(root)
-Trans,Lat,DOY,Time,z_pbl,alt_ms,u_s,t_s,p_s,hr_s = d.result
-root.withdraw()
+
+Trans = 0.788606 #transmissivity [0-1]
+Lat = 33.9932 #Latitude [dd]
+DOY = 294.0 #Day of year
+Time = 11.217 #Time of overpass [decimal hours]
+z_pbl = 1000.0#PBL height [m]
+alt_ms = 2.5 #Measurement height [m]
+u_s = 4.313 #Wind speed [m/s]
+t_s = 27.35 #Air temperature [Celcius]
+p_s = 100000.0 #Air pressure [Pa]
+hr_s = 0.5055 #Relative humidity [0-1]
 z_ms = alt_ms
 
 # Define output files
-lemap = guiOutputMap('Latent Heat Flux Map','./example/le.map')
-hmap = guiOutputMap('Sensible Heat Flux Map','./example/h.map')
-gmap = guiOutputMap('Soil Heat Flux Map','./example/g0.map')
-rnmap = guiOutputMap('Net Radiation Map','./example/rn.map')
-evaprmap = guiOutputMap('Relative Evapotranspiration Map','./example/evapr.map')
-evapfrmap = guiOutputMap('Evaporative Fraction Map','./example/evapfr.map')
-etmap = guiOutputMap('Actual Evapotranspiration Map','./example/et.map')
+lemap = './example/le.map'
+hmap = './example/h.map'
+gmap = './example/g0.map'
+rnmap = './example/rn.map'
+evaprmap = './example/evapr.map'
+evapfrmap = './example/evapfr.map'
+etmap = './example/et.map'
 
-print "Initializing SEBS.",
+print("Initializing SEBS.",)
 # Initialize model starttime for calculation runtime
 starttime = time()
 # Check input data
 nd = ifthenelse(pcror(pcrlt(nd,0.0),pcrgt(nd,1.0)), 1.0, nd) # Convert waterbodies to 1.0 --> soilflux is minimal
 assertWithinRange(nd, 0.0, 1.0)
-assert cellvalue(mapminimum(DEM), 0, 0) >= 0.0
-assert cellvalue(mapminimum(T), 0, 0) >= 0.0
+minimumDEM = cellvalue(mapminimum(DEM), 0, 0)
+assert minimumDEM[0] >= 0.0
+minimumT = cellvalue(mapminimum(T), 0, 0)
+assert minimumT[0] >= 0.0
 assert DOY >= 0.0 and DOY <= 366
 assert Time >= 0.0 and Time <= 24.0
 assert alt_ms >= 0.0
@@ -579,26 +495,27 @@ albedo = ifthenelse(pcror(pcrlt(albedo,0.0),pcrgt(albedo,1.0)), 0.0, albedo)
 assertWithinRange(albedo, 0.0, 1.0)
 ems = ifthenelse(pcror(pcrlt(ems,0.0), pcrgt(ems,1.0)), 0.0, ems)
 assertWithinRange(ems, 0.0, 1.0)
-print "\b.",   
+T = ifthen(T >= 273.15, T)
+print("\b.",)   
 
 # INITIALIZE MODEL
 # Calculating initial LAI
 LAINDVI = LAINDVI(nd)
 LAI = LAINDVI[0]
 assert(LAI >= 0.0 and LAI <= 6.0)
-print "\b.",
+print("\b.",)
 nd_max = LAINDVI[1]
 nd_min = LAINDVI[2]
 nd_mid = LAINDVI[3]
 nd_df = LAINDVI[4]
-print "\b.",
+print("\b.",)
 # Calculate initial PBL parameters
 Fu_pbl = u_pbl(nd)
 u_pbl = Fu_pbl[0]
 u_pbl = cellvalue(u_pbl, 0, 0)
 u_pbl = u_pbl[0]
 assert u_pbl >= 0.0
-print "\b.",
+print("\b.",)
 z0m = Fu_pbl[1]
 d = Fu_pbl[2]
 fc = Fu_pbl[3]
@@ -608,10 +525,10 @@ h = Fu_pbl[4]
 KB_1 = FKB_1(u_pbl, z_pbl, h, LAI, fc, t_s, p_s)
 KB_1 = cellvalue(KB_1, 0, 0)
 KB_1 = KB_1[0]
-print "\b.",
+print("\b.",)
 z0h = cellvalue(z0h(KB_1, z0m), 0, 0)
 z0h = z0h[0]
-print "\b."
+print("\b.")
 
 # Calculating initial temperatures and pressures"
 t_c = ln((z_pbl - d) / z0h) / ln((alt_ms - d) / z0h)
@@ -673,7 +590,7 @@ CL = pcrumin(rhoam) * Cp * Theta_v / (k * g)
 
 
 # Calculate energy balance
-print "Calculating Energy Balance terms..."
+print("Calculating Energy Balance terms...")
 Rswd = Rswd(DEM, Lat, Trans, DOY, Time)
 Eair = 9.2 * (t_pbl/1000.0) ** 2.0
 Rn = Rn(albedo, Rswd, Eair, t_pbl, ems, T)
@@ -682,12 +599,12 @@ G0 = G0(Rn, fc)
 report(G0,gmap)
 R_G = Rn - G0
 # Dry-limit heat flux
-print "Calculating Dry Limit..."
+print("Calculating Dry Limit...")
 H_d = R_G
 FRUstar = FRUstar(z_pbl,  hst)
 RUstar = FRUstar[0]
 RL = FRUstar[1]
-print "Calculating Wet Limit..."
+print("Calculating Wet Limit...")
 # For completely wet areas
 # Wet-limit stability length
 L_e = 2.430E+06   # Latent heat of vapourization (J kg-1) (Brutsaert, 1982)
@@ -702,7 +619,7 @@ gamma = 67.0   # psychrometric constant (Pa K-1)
 H_w = (R_G - (rhoacp / re_w) * ((esat - eact) / gamma)) / (1.0 + slopef / gamma)
 LEwet = Rn - G0 - H_w
 # Sensible Heat flux
-print "Calculating sensible heat flux..."
+print("Calculating sensible heat flux...")
 C_i = ifthenelse(z_pbl >= hst, Cw(z_pbl, RL, z0m, z0h), PSIh_y(pcrumin(z_pbl)/RL))
 # external resistance
 re_i = (zdh - C_i) / (k * RUstar)
@@ -712,7 +629,7 @@ H_i = ifthenelse(H_i < H_w, H_w, H_i)
 report(H_i, hmap)
 
 # Calculate evaporation variables
-print "Calculating relative evaporation and evaporative fraction..."
+print("Calculating relative evaporation and evaporative fraction...")
 # Calculate relative evaporation
 ev_r = 1.0 - (H_i - H_w) / (H_d - H_w) # set water and wet surfaces to 1.0
 report(ev_r, evaprmap)
@@ -721,14 +638,14 @@ Evapfr = ev_r * (1.0 - H_w / H_d)
 report(Evapfr, evapfrmap)
 
 # Calculate latent energy flux
-print "Calculating Latent Energy Flux..."
+print("Calculating Latent Energy Flux...")
 labdaE = Evapfr * (Rn - G0)
 labdaE2 = Rn - G0 - H_i
 #assert(labdaE == labdaE2) # Check on closure of energy balance components!
 report(labdaE, lemap)
 
 # Calculate evapotranspiration flux
-print "Calculating Evapotranspiration Flux..."
+print("Calculating Evapotranspiration Flux...")
 rhow = 998.0 # density of water [kg m-3]
 E = labdaE / (L_e * rhow) #[m/s]
 report(E, etmap)
@@ -737,19 +654,19 @@ report(E, etmap)
 #checkFile.close()
 endtime = time()
 deltaTime = endtime - starttime
+print()
+print("=============================================")
+print("The model has been running for %5.2f seconds." % deltaTime)
 print
-print "============================================="
-print "The model has been running for %5.2f seconds." % deltaTime
-print
-print "Credits:"
-print "Bob Su (ITC)"
-print "Ambro Gieske (ITC)"
-print "Wim Timmermans (ITC)"
-print "Victor Jetten (UU)"
-print "Steven de Jong (UU)"
-print "Li Jia (WUR)"
-print "Kor de Jong (UU)"
-print "Derek Karssenberg (UU)"
-print "============================================="
+print("Credits:")
+print("Bob Su (ITC)")
+print("Ambro Gieske (ITC)")
+print("Wim Timmermans (ITC)")
+print("Victor Jetten (UU)")
+print("Steven de Jong (UU)")
+print("Li Jia (WUR)")
+print("Kor de Jong (UU)")
+print("Derek Karssenberg (UU)")
+print("=============================================")
 
 
