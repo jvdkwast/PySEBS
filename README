@@ -5,3 +5,6 @@ SEBS is a single-source surface energy balance model, which estimates atmospheri
 The current setup of SEBS requires three sets of input data: (1) Data derived from remote sensing: albedo, emissivity, temperature and Normalized Difference Vegetation Index (NDVI) to derive surface roughness parameters; (2) Meteorological parameters at a reference site (air pressure, temperature, relative humidity, wind speed); (3) Radiation data (downward solar radiation, downward longwave radiation).
 
 The model consistis of three modules: (1) submodel to derive energy balance terms; (2) submodel to derive stability parameters and (3) submodel to derive roughness length for heat transfer. Using these three modules, the energy balance for limiting cases (i.e, completely wet or dry pixels) can be resolved. Consequently, the energy balance terms, relative evaporation, evaporative fraction and evaporation flux can be derived for all pixels.
+
+Install PCRaster using this video: https://youtu.be/PGaZSQeiSfg
+PCRaster: http://www.pcraster.eu
