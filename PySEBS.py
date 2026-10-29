@@ -1,6 +1,7 @@
 #!/usr/bin/env python
-# -*- coding: latin-1 -*-
+# -*- coding: utf-8 -*-
 from pcraster import *
+from time import time   # used for the run-time report
 
 
 
@@ -58,7 +59,7 @@ def Rswd(DEM, Lat, Trans, DOY, Time):
    """ Potential Radiation Equator model
    (c) O. van Dam, UU, Tropenbos-Guyana
    Version 5, June 2000
-   NOTE: Copyright: This program is free to use provided·
+   NOTE: Copyright: This program is free to use provided
          you refer to the manualfor citation.
          Do not distribute without prior approval of the author.
          Manual and additional info: O.vanDam@geog.uu.nl
@@ -97,8 +98,9 @@ def Rswd(DEM, Lat, Trans, DOY, Time):
    SolAzi = scalar(acos((sin(SolDec)*cos(Lat)-cos(SolDec)*sin(Lat)*cos(HourAng))/cos(SolAlt)))
    SolAzi = ifthenelse(Time <= 12.0, SolAzi, 360.0 - SolAzi)
    # Additonal extra correction by R.Sluiter, Aug '99
-   SolAzi = ifthenelse(SolAzi > 89.994 and SolAzi < 90.0, 90.0, SolAzi)
-   SolAzi = ifthenelse(SolAzi > 269.994 and SolAzi < 270.0, 270.0, SolAzi)
+   # NB: Python 'and' does not work cell-by-cell on PCRaster maps; use pcrand
+   SolAzi = ifthenelse(pcrand(SolAzi > 89.994, SolAzi < 90.0), 90.0, SolAzi)
+   SolAzi = ifthenelse(pcrand(SolAzi > 269.994, SolAzi < 270.0), 270.0, SolAzi)
 
    # Surface azimuth
    # ----------------------------
@@ -107,7 +109,7 @@ def Rswd(DEM, Lat, Trans, DOY, Time):
 
    # Critical angle sun
    # ----------------------------
-   # HoriAng  :tan maximum angle over DEM in direction sun, 0 if negÂ·
+   # HoriAng  :tan maximum angle over DEM in direction sun, 0 if neg
    # CritSun  :tan of maximum angle in direction solar beams
    # Shade    :cell in sun 1, in shade 0
    HoriAng   = horizontan(DEM,directional(SolAzi))
@@ -117,7 +119,7 @@ def Rswd(DEM, Lat, Trans, DOY, Time):
    
    # Radiation outer atmosphere
    # ----------------------------
-   OpCorr = Trans**((sqrt(1229.0+(614.0*sin(SolAlt))**2.0)-614.0*sin(SolAlt))*AtmPcor)     # correction for air masses [-]Â·
+   OpCorr = Trans**((sqrt(1229.0+(614.0*sin(SolAlt))**2.0)-614.0*sin(SolAlt))*AtmPcor)     # correction for air masses [-]
    Sout   = Sc*(1.0+0.034*cos(360.0*DOY/365.0)) # radiation outer atmosphere [W/m2]
    Snor   = Sout*OpCorr                    # rad on surface normal to the beam [W/m2]
 
@@ -129,8 +131,11 @@ def Rswd(DEM, Lat, Trans, DOY, Time):
    # PotRad :avg of Stot(Hour) and Stot(Hour-HourStep)
    Sdir   = ifthenelse(Snor*cosIncident*Shade < 0.0, 0.0, Snor*cosIncident*Shade)
    Sdiff  = ifthenelse(Sout*(0.271-0.294*OpCorr)*sin(SolAlt) < 0.0, 0.0, Sout*(0.271-0.294*OpCorr)*sin(SolAlt))
-   #Rswd  = Sdir + Sdiff                                         # Rad [W/m2]
-   Rswd = Snor
+   # Rswd in the SEBS net radiation equation (Su, 2002, Eq. 2) is the downward
+   # shortwave radiation received by the land surface, i.e. direct + diffuse.
+   # Snor is the beam radiation on a plane normal to the sun and overestimates
+   # the radiation on the surface by a factor of about 1/sin(solar altitude).
+   Rswd = Sdir + Sdiff                                          # Rad [W/m2]
    return Rswd
 
 def LAINDVI(NDVI):
@@ -143,11 +148,11 @@ def LAINDVI(NDVI):
    nd_mid = median(NDVI)
    nd_df = nd_max[0] - nd_min[0]
    if nd_df == 0.0:
-      nd_df == 1.0
+      nd_df = 1.0   # was 'nd_df == 1.0' (a comparison, had no effect)
 
-   LAI = sqrt(nd_mid * (1.0 + nd_mid) / (1.0 - nd_mid + 1.0E-6))
+   LAI = (nd_mid * (1.0 + nd_mid) / (1.0 - nd_mid + 1.0E-6)) ** 0.5
    if LAI > 6.0:
-      LAI == 6.0
+      LAI = 6.0   # was 'LAI == 6.0' (a comparison, had no effect)
    return LAI, nd_max[0], nd_min[0], nd_mid, nd_df
 
 def u_pbl(NDVI):
@@ -183,8 +188,8 @@ def FKB_1(u_zref, zref, h, LAI, Wfol, Ta, pa):
 
    # Constants
    C_d = 0.2   # foliage drag coefficient
-   C_t = 0.01  # heat transfer coefficient
-   k = 0.41     # Von Karman constant
+   C_t = 0.05  # heat transfer coefficient of the leaf, 0.005N <= Ct <= 0.075N (Su, 2002); same value as in GKB_1
+   k = 0.4     # Von Karman constant (same as rest of model, Su 2002)
    Pr = 0.7    # Prandtl number
    hs = 0.009  # height of soil roughness obstacles (0.009-0.024)
    
@@ -208,7 +213,9 @@ def FKB_1(u_zref, zref, h, LAI, Wfol, Ta, pa):
    else:
       F1st = 0.0
    # Second term
-   S2nd = k * ust2u_h * 0.136 * Pr ** (2.0/3.0) * sqrt(ustarh * h / nu0) * Wfol ** 2.0 * Wsoil ** 2.0
+   # Su (2002, Eq. 9): 2 fc fs k (u*/u(h)) (z0/h) / Ct*, with Ct* = Pr^(-2/3) Re*^(-1/2)
+   # and Re* = hs u* / nu (roughness Reynolds number based on SOIL roughness height hs)
+   S2nd = 2.0 * Wfol * Wsoil * k * ust2u_h * 0.136 * Pr ** (2.0/3.0) * sqrt(ustarh * hs / nu0)
    # Third term
    T3rd = (2.46 * (u_zref * k / ln(zref/hs) * hs / nu0) ** 0.25 - ln(7.4)) * Wsoil ** 2.0
    
@@ -227,8 +234,8 @@ def GKB_1(u_zref, zref, h, LAI, Wfol, Ta, pa):
    
    # Constants
    C_d = 0.2   # foliage drag coefficient
-   C_t = 0.05  # heat transfer coefficient
-   k = 0.41     # Von Karman constant
+   C_t = 0.05  # heat transfer coefficient of the leaf, 0.005N <= Ct <= 0.075N (Su, 2002)
+   k = 0.4     # Von Karman constant (same as rest of model, Su 2002)
    Pr = 0.7    # Prandtl number
    hs = 0.009  # height of soil roughness obstacles (0.009-0.024)
    
@@ -245,28 +252,30 @@ def GKB_1(u_zref, zref, h, LAI, Wfol, Ta, pa):
    # First term
    F1st = ifthenelse(pcrne(n_h, 0.0), k * C_d / (4.0 * C_t * ust2u_h * (1.0 - exp(pcrumin(n_h)/2.0))) * Wfol ** 2.0, 0.0)
    # Second term
-   S2nd = k * ust2u_h * 0.136 * Pr ** (2.0/3.0) * sqrt(ustarh * h / nu0) * Wfol ** 2.0 * Wsoil ** 2.0
+   # Su (2002, Eq. 9): 2 fc fs k (u*/u(h)) (z0/h) / Ct*, with Ct* = Pr^(-2/3) Re*^(-1/2)
+   # and Re* = hs u* / nu (roughness Reynolds number based on SOIL roughness height hs)
+   S2nd = 2.0 * Wfol * Wsoil * k * ust2u_h * 0.136 * Pr ** (2.0/3.0) * sqrt(ustarh * hs / nu0)
    # Third term
    T3rd = (2.46 * (u_zref * k / ln(zref/hs) * hs / nu0) ** 0.25 - ln(7.4)) * Wsoil ** 2.0
    
    return F1st + S2nd + T3rd
 
-def Rn(Alfa, Rswd, Eair, t_pbl, ems, T):
-#def Rn(Alfa, Rswd, Eair, t_pbl, Eground):
-   """ Calculation of surface net radiation [W m-2]
+def Rn(Alfa, Rswd, Eair, t_air, ems, T):
+   """ Calculation of surface net radiation [W m-2] (Su, 2002, Eq. 2):
+   Rn = (1 - albedo) Rswd + ems Rlwd - ems sigma T0^4, with Rlwd = Eair sigma Ta^4
    Alfa Input albedo map [-]
-   Rswd Input downward solar radiation [W m-2], PCRaster map from POTRAD
+   Rswd Input downward solar radiation [W m-2]
    Eair Input emissivity air [-]
-   Eground Input PCRaster emissivity map [-]
-   t_pbl Input PBL temperature map [K]
+   t_air Input near-surface air temperature [K] (screen level, as in Swinbank, 1963)
+   ems Input PCRaster emissivity map [-]
    T Surface Kinetic Temperature [K]"""
-   
+
    print("Calculating Net Radiation map...")
    # constants
-   sigma = 5.678E-8   #Stefan Boltzmann's constant (W m-2 K-4)
-   
+   sigma = 5.67E-8   #Stefan Boltzmann's constant (W m-2 K-4)
+
    # calculations
-   Rn = (1.0 - Alfa) * Rswd + 5.678 * ems * (Eair * (t_pbl/100.0)**4.0 - (T/100.0)**4.0)
+   Rn = (1.0 - Alfa) * Rswd + sigma * ems * (Eair * t_air**4.0 - T**4.0)
    return Rn
 
 def G0(Rn, cover):
@@ -314,7 +323,8 @@ def FRUstar(z_pbl,hst):
       RUstarA = ku / (zdm - tempBw)
       tempCw = Cw(z_pbl, RLA, z0m, z0h)
       RHA = CH * RUstarA / (zdh - tempCw)
-      RepsA = mapmaximum(abs(RH0A - RHA))
+      # convergence check needs a Python number, not a PCRaster map
+      RepsA = cellvalue(mapmaximum(abs(RH0A - RHA)), 0, 0)[0]
       difa = abs(RH0A - RHA)
       min = mapminimum(difa)
       meandif = mean(difa)
@@ -326,13 +336,13 @@ def FRUstar(z_pbl,hst):
    
    while RepsB > itThreshold and IstepsB < itNr:
       RLB = CL * RUstarB ** 3.0 / RHB
-      tempPSIm_y1 = PSIm_y(zd0/ RLB)
-      tempPSIm_y2 = PSIm_y(z0m / RLB)
+      tempPSIm_y1 = PSIm_y(pcrumin(zd0) / RLB)   # argument is y = -z/L
+      tempPSIm_y2 = PSIm_y(pcrumin(z0m) / RLB)
       RUstarB = ku / (zdm - tempPSIm_y1 + tempPSIm_y2)
-      tempPSIh_y1 = PSIh_y(zd0 / RLB)
-      tempPSIh_y2 = PSIh_y(z0h / RLB)
+      tempPSIh_y1 = PSIh_y(pcrumin(zd0) / RLB)
+      tempPSIh_y2 = PSIh_y(pcrumin(z0h) / RLB)
       RHB = CH * RUstarB / (zdh - tempPSIh_y1 + tempPSIh_y2)
-      RepsB = mapmaximum(abs(RH0B - RHB))
+      RepsB = cellvalue(mapmaximum(abs(RH0B - RHB)), 0, 0)[0]
       difb = abs(RH0B - RHB)
       meandif = mean(difb)
       min = mapminimum(difb)                                                    
@@ -341,6 +351,9 @@ def FRUstar(z_pbl,hst):
       percentage = (IstepsB/itNr)*100
       print("Iteration B:", int(percentage), "% completed\r",)
    print() 
+   # Obukhov length consistent with the final u* and H
+   RLA = CL * RUstarA ** 3.0 / RHA
+   RLB = CL * RUstarB ** 3.0 / RHB
    RUstar = ifthenelse(z_pbl >= hst, RUstarA, RUstarB)
    RL = ifthenelse(z_pbl >= hst, RLA, RLB)
    dif = ifthenelse(z_pbl >= hst, difa, difb)
@@ -360,36 +373,60 @@ def PSIm_y(Y):
    # Integrated stability correction function for momentum
    # Inputs
    # Y = -z/L, where z is the height, L the Obukhov length
-   # test values
+   # Unstable (Y >= 0): Brutsaert (1999)
+   # Stable (Y < 0): Beljaars and Holtslag (1991), as prescribed in Su (2002)
+   #   (previously abs(Y) was used, which applied the unstable function to
+   #    stable conditions and gave the wrong sign of the correction)
    
    # Constants (Brutsaert, 1999)
    a = 0.33
    b = 0.41
-   m = 1.0
    pi= 3.141592654
    
-   # Calculation
-   #//HK 040902 
-   Y = abs(Y) #abs(Y)
-   x = (Y/a) ** (1.0/3.0)
+   # Unstable
+   Yu = abs(Y)
+   x = (Yu/a) ** (1.0/3.0)
    PSI0 = pcrumin(ln(a)) + sqrt(3.0) * b * a ** (1.0 / 3.0) * pi / 6.0
    b_3 = b ** -3.0
-   PSIm_y = ifthenelse(Y <= b_3, PSIma(Y, x) + PSI0, PSIma(b_3, ((b_3/a)**(1.0/3.0))) + PSI0)
-   #PSIm_y = ifthenelse(Y <= b_3, PSIma(Y, x) + PSI0, (1.0 / (PSIma(b_3, ((b_3/a)**(1.0/3.0))))) + PSI0)
+   PSIm_u = ifthenelse(Yu <= b_3, PSIma(Yu, x) + PSI0, PSIma(b_3, ((b_3/a)**(1.0/3.0))) + PSI0)
+   # Stable, zeta = z/L = -Y
+   PSIm_y = ifthenelse(Y >= 0.0, PSIm_u, PSIm_stable(pcrumin(Y)))
    return PSIm_y
    
 def PSIh_y(Y):
    # Integrated stability correction function for heat
    # Inputs
    # Y = -z/L, z is the height, L the Obukhov length
+   # Unstable (Y >= 0): Brutsaert (1999); stable (Y < 0): Beljaars and Holtslag (1991)
    # constants (Brutsaert, 1999)
    c = 0.33
    d = 0.057
    n = 0.78
    # Calculation
-   Y =  abs(Y)
-   PSIh_y = (1.0 - d) / n * ln((c + Y ** n) / c)
+   Yu = abs(Y)
+   PSIh_u = (1.0 - d) / n * ln((c + Yu ** n) / c)
+   PSIh_y = ifthenelse(Y >= 0.0, PSIh_u, PSIh_stable(pcrumin(Y)))
    return PSIh_y
+
+def PSIm_stable(zeta):
+   """Stability correction for momentum, stable conditions (Beljaars and Holtslag, 1991)
+   zeta = z/L (>= 0)"""
+   a = 1.0
+   b = 0.667
+   c = 5.0
+   d = 0.35
+   zeta = ifthenelse(zeta < 0.0, 0.0, zeta)
+   return pcrumin(a * zeta + b * (zeta - c / d) * exp(pcrumin(d * zeta)) + b * c / d)
+
+def PSIh_stable(zeta):
+   """Stability correction for heat, stable conditions (Beljaars and Holtslag, 1991)
+   zeta = z/L (>= 0)"""
+   a = 1.0
+   b = 0.667
+   c = 5.0
+   d = 0.35
+   zeta = ifthenelse(zeta < 0.0, 0.0, zeta)
+   return pcrumin((1.0 + 2.0 * a * zeta / 3.0) ** 1.5 + b * (zeta - c / d) * exp(pcrumin(d * zeta)) + b * c / d - 1.0)
 
 # BAS STABILITY CORRECTION FUNCTIONS
 def Bw(hi, L, z0):
@@ -407,6 +444,10 @@ def Bw(hi, L, z0):
    tempB1 = PSIm_y(B1)
    B = ifthenelse(z0 < B0, -1.0 * ln(alfa) + PSIm_y(B11) - PSIm_y(B1), ln(B21) + PSIm_y(B22) - PSIm_y(B1))
    Bw = ifthenelse(B < 0.0, 0.0, B) # This results from unfortunate parameter combination!
+   # The BAS functions of Brutsaert (1999) are derived for unstable conditions.
+   # For stable conditions (L > 0) use the MOS integral between z0 and hi with the
+   # Beljaars and Holtslag (1991) functions (Su, 2002).
+   Bw = ifthenelse(L > 0.0, PSIm_y(pcrumin(hi) / L) - PSIm_y(B1), Bw)
    return Bw
 
 def Cw(hi, L, z0, z0h):
@@ -419,6 +460,8 @@ def Cw(hi, L, z0, z0h):
    C22 = -beta * z0 / L
    C = ifthenelse(z0 < C0, pcrumin(ln(alfa)) + PSIh_y(C11) - PSIh_y(C1), ln(C21) + PSIh_y(C22) - PSIh_y(C1))
    Cw = ifthenelse(C < 0.0, 0.0, C) # This results from unfortunate parameter combination!
+   # Stable conditions: MOS with Beljaars and Holtslag (1991), see Bw
+   Cw = ifthenelse(L > 0.0, PSIh_y(pcrumin(hi) / L) - PSIh_y(C1), Cw)
    return Cw
 
 def esat(t):
@@ -457,13 +500,14 @@ ems = readmap('./example/emissivity90.map') # emissivity [-]
 Trans = 0.788606 #transmissivity [0-1]
 Lat = 33.9932 #Latitude [dd]
 DOY = 294.0 #Day of year
-Time = 11.217 #Time of overpass [decimal hours]
+Time = 11.217 #Time of overpass [decimal hours, local SOLAR time; used in the solar hour angle]
 z_pbl = 1000.0#PBL height [m]
 alt_ms = 2.5 #Measurement height [m]
 u_s = 4.313 #Wind speed [m/s]
 t_s = 27.35 #Air temperature [Celcius]
 p_s = 100000.0 #Air pressure [Pa]
 hr_s = 0.5055 #Relative humidity [0-1]
+Rswd_measured = None #Measured downward shortwave radiation [W m-2]; if None it is modelled with Rswd()
 z_ms = alt_ms
 
 # Define output files
@@ -545,7 +589,11 @@ T_0pbl = 0.5 * (T0 + t_pbl_A)   # mean potential temperature
 Tcn = T_0pbl - 273.15    # mean PBL temperature converted to degrees Celcius
 esat = 611.0 * exp(17.502 * Tcn / (Tcn + 240.97))   # Pa
 hr_pbl = hr_s
-eact = hr_pbl * mean(esat) # actual vapour pressure
+# Actual vapour pressure: relative humidity refers to the saturation vapour pressure
+# at the air temperature at which it was measured (t_s), not at the mean
+# surface/PBL temperature
+t_sC = t_s - 273.15
+eact = hr_pbl * 611.0 * exp(17.502 * t_sC / (t_sC + 240.97)) # actual vapour pressure (Pa)
 q_pbl_A = 5.0 / 8.0 * eact / p_pbl_A
 z_pbl = z_pbl_A
 ps = p_s_A
@@ -566,8 +614,13 @@ z0h = z0m / exp(KB_1)
 Tsk = T					# potential surface temperature
 Theta_s = T0
 Theta_v = Tsk * (1.0 + 0.61 * q_pbl)	# surface virtual temperature
-#Theta_a = t_pbl				# potential air temperature at reference height (K)
-Theta_a = t_pbl * (101325/p_pbl) ** 0.286
+# Potential air temperature at reference height (K).
+# t_pbl is extrapolated with the (neutral) log profile from the surface and the
+# measurement height, and has already been converted to potential temperature
+# (reference 101325 Pa) above, in the same way as T0. The former line
+# Theta_a = t_pbl * (101325/p_pbl) ** 0.286 converted it a second time, adding
+# about 10 K and making most of the surface-air temperature difference disappear.
+Theta_a = t_pbl
 T0ta = Theta_s - Theta_a
 Rv = 461.05				# specific gas constant water vapour (J kg-1 K-1)
 Rd = 287.04				# specific gas constant dry air (J kg-1 K-1)
@@ -575,7 +628,7 @@ Cp = 1005.0				# specific heat (J kg-1 K-1)
 eact = p_pbl * q_pbl * (Rv / Rd)	# actual vapour pressure
 rhoa = ps / (Rd * Theta_v)		# surface air density (kg m-3)
 rhoam = (ps / (Rd * Tsk)) * (1.0 - 0.378 * eact / ps) # moist air density (kg m-3)
-rhoacp = rhoa * Cp			# specific air heat capacity (J K-1 m­3)
+rhoacp = rhoa * Cp			# specific air heat capacity (J K-1 m-3)
 alfa = 0.12
 beta = 125.0
 g = 9.81
@@ -591,9 +644,14 @@ CL = pcrumin(rhoam) * Cp * Theta_v / (k * g)
 
 # Calculate energy balance
 print("Calculating Energy Balance terms...")
-Rswd = Rswd(DEM, Lat, Trans, DOY, Time)
-Eair = 9.2 * (t_pbl/1000.0) ** 2.0
-Rn = Rn(albedo, Rswd, Eair, t_pbl, ems, T)
+if Rswd_measured is None:
+   Rswd = Rswd(DEM, Lat, Trans, DOY, Time)
+else:
+   Rswd = scalar(Rswd_measured)
+# Air emissivity (Swinbank, 1963) and downward longwave radiation use the
+# near-surface (screen level) air temperature t_s [K], not the PBL temperature
+Eair = 9.2 * (t_s/1000.0) ** 2.0
+Rn = Rn(albedo, Rswd, Eair, t_s, ems, T)
 report(Rn, rnmap)
 G0 = G0(Rn, fc)
 report(G0,gmap)
@@ -609,7 +667,7 @@ print("Calculating Wet Limit...")
 # Wet-limit stability length
 L_e = 2.430E+06   # Latent heat of vapourization (J kg-1) (Brutsaert, 1982)
 L_w = pcrumin(RUstar ** 3.0) * rhoam / (0.61 * k * g * R_G / L_e)
-C_wet = ifthenelse(z_pbl >= hst, Cw(z_pbl, L_w, z0m, z0h), PSIh_y(pcrumin(z_pbl/L_w)))
+C_wet = ifthenelse(z_pbl >= hst, Cw(z_pbl, L_w, z0m, z0h), PSIh_y(pcrumin(zd0)/L_w) - PSIh_y(pcrumin(z0h)/L_w))
 # Wet-limit external resistance
 re_w = (zdh - C_wet) / (k * RUstar)
 re_w = ifthenelse(re_w <= 0.0, zdh / (k * RUstar), re_w)
@@ -620,7 +678,7 @@ H_w = (R_G - (rhoacp / re_w) * ((esat - eact) / gamma)) / (1.0 + slopef / gamma)
 LEwet = Rn - G0 - H_w
 # Sensible Heat flux
 print("Calculating sensible heat flux...")
-C_i = ifthenelse(z_pbl >= hst, Cw(z_pbl, RL, z0m, z0h), PSIh_y(pcrumin(z_pbl)/RL))
+C_i = ifthenelse(z_pbl >= hst, Cw(z_pbl, RL, z0m, z0h), PSIh_y(pcrumin(zd0)/RL) - PSIh_y(pcrumin(z0h)/RL))
 # external resistance
 re_i = (zdh - C_i) / (k * RUstar)
 H_i = rhoacp * T0ta / re_i
